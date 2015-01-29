@@ -1,0 +1,56 @@
+This document contains the comments that I have about the API given in 
+"flash.h", "spi.h", and "swipe.h".
+
+
+flash.h:
+	I think that the flash memory should be responsible for managing keys to
+stored data rather than the programmer. What I mean by this is that the
+programmer should not select what index at which to store the data; the flash 
+memory should select a key for the data return it to the programmer. Following
+is what I think the flash_store function prototype should look like:
+/* Public: Store a buffer into fash memory.
+ *
+ * The flash memory is organized into key:value pairs. You can store and
+ * retreive a buffer of infinite length from any given index.
+ * 
+ * buffer - The data to store in flash.
+ * length - The length of the buffer.
+ * 
+ * Returns the index of the data in flash if the data was written successfully
+ * to flash.
+ * Returns -1 if the index or buffer was invalid.
+ */
+int flash_store(uint8_t buffer[], size_t length);
+
+
+spi.h:
+	The API is limited because it only allows for one slave on the SPI bus. The
+spi_read and spi_write functions do not include the slave_select signal which
+is normally used when there are multiple slaves. While this is not a problem
+for the single-client coding challenge, it would be a problem if future
+versions of this system were to require additional slaves.
+
+
+swipe.h:
+	I'm not entirely sure if this would be a good idea or not, but **assuming
+that the cards we are dealing with follow the ISO/IEC 7813 standard for
+finiancial transaction cards**, I think it would be more intuitive to pass in a
+struct to the swipe_enable function rather than a buffer containing the stripe
+data. The struct would look something like this:
+	struct StripeData {
+		track1_t t1;
+		track2_t t2;
+		track3_t t3;
+	};
+Of course, the types track1_t, track2_t, and track3_t would have to be defined
+based on the number of bits required for each track. Also, the swipe_enable
+function would have to convert the StripeData struct into the format necessary
+to write it to the stripe. What I'm trying to say is that it probably would be
+helpful to know what the magnetic stripe data looks like and store it
+accordingly to make using the stripe data in the program easier in case more
+functionality needs to be added to the host processor's program.  
+	I referred to the following documents for information on magnetic stripe
+cards and the ISO/IEC 7813 standard:
+http://www.magtek.com/documentation/public/99800004-1.08.pdf
+http://en.wikipedia.org/wiki/ISO/IEC_7813
+
