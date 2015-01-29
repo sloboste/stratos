@@ -1,0 +1,86 @@
+This document defines the protocol for SPI transactions between host processor
+(master) and client (slave).
+
+The host can issue the following commands to the client during spi_write:
+	VERIFY_CLIENT_ID 	:	Tell the client that during the next spi_read
+							transaction it must send its 16-bit chip id number
+							(I make the assumption that the client has a chip id
+							number) to the host. The chip id should be put into 
+							the buffer where buffer[0] = the lower 8 bits of the
+							chip id and buffer[1] = the higher 8 bits of the
+							chip id. The client must cause spi_write to return
+							true for this command.
+							
+	ASK_FOR_CMD			:	Tell the client that during the next spi_read
+							transaction it must send a command that it wants
+							executed followed by a 16-bit number indicating the 
+							number of bytes of data required to be read by the
+							master. The client must put the command into 
+							buffer[0], the lower 8 bits of the number of bytes
+							into buffer[1], and the upper 8 bits of the number
+							of bytes into buffer[2] during the next spi_read.
+							The client must then have the number of bytes of
+							data available for the host during the following 
+							spi_read. If the client does not have a command to
+							issue, it will cause spi_write to return false,
+							otherwise it should return true.
+							
+	STORE_SUCCESS		:	Tell the client that its STORE command was handled
+							successfully. This must be followed in the spi_write
+							buffer by the 8-bit index of the data in memory. So 
+							buffer[0] = STORE_SUCCESS and buffer[1] = index.
+							This should always cause spi_write to return false. 
+							
+	STORE_FAIL			:	Tell the client that its STORE command was not
+							handled successfully. This should always cause
+							spi_write to return false.
+		
+	ACTIVATE_SUCCESS	:	Tell the client that its SET_KEY_ACTIVE command was
+							handled successfully. This should always cause
+							spi_write to return false.
+	
+	ACTIVATE_FAIL		:	Tell the client that its SET_KEY_ACTIVE command was
+							NOT handled successfully. This should always cause
+							spi_write to return false.
+	
+	ERASE_SUCCESS		:	Tell the client that its ERASE_KEY command was
+							handled successfully. This should always cause
+							spi_write to return false.
+	
+	ERASE_FAIL			:	Tell the client that its ERASE_KEY command was NOT
+							handled successfully. This should always cause
+							spi_write to return false. 
+	
+	BAD_CMD				:	Tell the client that the commmand it just issued
+							was invalid. This should always cause spi_write to
+							return false.
+
+The client can issue the following commands to the host during spi_read:
+	SET_KEY_ACTIVE		:	Tell the host to set the data associated with a 
+							specific 8-bit key as the active data on the
+							magnetic stripe. The client should fill the spi_read
+							buffer as follows: buffer[0] = SET_KEY_ACTIVE, 
+							buffer[1] = 0x00, buffer[2] = 0x00
+	
+	STORE				:	Tell the host to store magnetic stripe data in flash
+							memory. The client should fill the spi_read buffer
+							as follows: buffer[0] = STORE, buffer[1] = lower 
+							8-bits of the number of bytes of data to store, 
+							buffer[2] = upper 8-bits of the number of bytes of
+							data to store. The client should then fill the next
+							spi_read buffer with the data it would like stored.
+	
+	ERASE_KEY			:	Tell the host to delet the data associated with a
+							specific 8-bit key from flash memory. The client
+							should fill the spi_read buffer as follows:
+							buffer[0] = ERASE_KEY, buffer[1] = key, buffer[2] =
+							0x00.
+ 
+
+General transaction structure:
+1. Host does spi_write to ask client for a command
+2. Host does spi_read to read the command and number of data bytes from client
+3. Host does spi_read to read the specified number of data bytes from client
+4. Host processes command internally
+5. Host does spi_write to tell client result of the command
+

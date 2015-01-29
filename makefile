@@ -27,7 +27,6 @@ swipe.o: swipe.c swipe.h
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
 
-
-.PHONY: all release debug clean
+.PHONY: all release debug clean 
 .SUFFIXES: 
 

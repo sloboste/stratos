@@ -22,6 +22,24 @@ is what I think the flash_store function prototype should look like:
  */
 int flash_store(uint8_t buffer[], size_t length);
 
+Also, having the ablility to store a buffer of inifinte length requires the
+programmer to keep track of how large each stored buffer is so he can then 
+allocate an appropriately sized buffer for retrieval of the data. The programmer
+should not have to do this. One solution to this problem is to have the flash 
+memory keep track of how large each buffer is and make that size availble
+through a function with the following prototype:
+/* Public: Check how big the buffer stored at this index is
+ * 
+ * index - The index of the data in flash
+ *
+ * Returns the size of the buffer stored in flash at this index
+ */
+ unsigned int flash_size_at(int index);
+ 
+A second solution would be to limit the size of the buffer that can be stored
+so that the programmer passes in a buffer of a fixed size each time
+flash_retrieve is called.
+
 
 spi.h:
 	The API is limited because it only allows for one slave on the SPI bus. The
