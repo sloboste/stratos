@@ -84,3 +84,9 @@ General transaction structure:
 4. Host processes command internally
 5. Host does spi_write to tell client result of the command
 
+Note: I designed this protocol to allow the client to send a STORE command
+without putting a limit on the buffer size. If the maximum size of the data to
+store was known, an upper limit could have been imposed on the buffer size and
+the host would not need to ask the client how many bytes of data it wants to 
+store.
+

@@ -16,22 +16,28 @@
 
 /* Maximum number of stripe data that we want to store. This puts an upper limit
  * on the number of keys that we have to keep track of.
- * Note: it would be better if this were infinite...
+ * Note: it would be better if this were infinite since a limit was never
  */
 #define MAX_STRIPE_DATA 255 /* uint8_t is the key type right now... */
 
 
 /* Keybox: responsible for keeping track of keys to identify each magnetic
  * 		   stripe datum.
+ * Note: I really should have written a wrapper for the flash api and
+ *		 integrated this keybox idea into the wrapper so it would be hidden
+ * 		 from the programmer.
  */
- /* Private: */
-bool Keybox_key_status[MAX_STRIPE_DATA];
-size_t Keybox_data_size[MAX_STRIPE_DATA];
-bool Keybox_data_active;
-uint8_t Keybox_active_key;
-uint8_t Keybox_num_in_use;
+ 
+/* Private members */
+bool Keybox_key_status[MAX_STRIPE_DATA]; /* Is the key out of the box? */
+size_t Keybox_data_size[MAX_STRIPE_DATA]; /* Sizeof data associated with key */
+bool Keybox_data_active; /* Is there data active on stripe? */
+uint8_t Keybox_active_key; /* Key associated with the data active on stripe */
+uint8_t Keybox_num_in_use; /* Number of keys currently out of the box */
 
-/* Public */
+/* Public functions */
+/* Public: Initialize the keybox with no data active and all keys in the box
+ */
 void Keybox_init()
 {
 	int i;
@@ -42,11 +48,22 @@ void Keybox_init()
 	Keybox_data_active = false;
 }
 
+/* Public: Check if the keybox has no keys left to take out
+ * 
+ * Returns true if all keys are in use, i.e., no more room in flash
+ * Returns false otherwise
+ */
 bool Keybox_is_empty()
 {
 	return (Keybox_num_in_use == MAX_STRIPE_DATA);
 }
 
+/* Public: Take a key out of the keybox to use as an index for flash
+ * 
+ * Requires that the keybox is not empty
+ *
+ * Returns an available key
+ */
 uint8_t Keybox_get_key()
 {
 	/* O(n)... room for improvement here 
@@ -67,6 +84,10 @@ uint8_t Keybox_get_key()
 	 return key;
 }
 
+/* Public: Return a key to the keybox, i.e., free an index in flash
+ *
+ * Requires that the key is a valid key that has been checked out
+ */
 void Keybox_giveup_key(uint8_t key)
 {
 	assert(key < MAX_STRIPE_DATA);
@@ -76,6 +97,10 @@ void Keybox_giveup_key(uint8_t key)
 	return;
 }
 
+/* Public: Mark this key (index in flash) as the active stripe data
+ *
+ * Requires that the key is a valid key that has been checked out
+ */
 void Keybox_activate_key(uint8_t key)
 {
 	assert(key < MAX_STRIPE_DATA);
@@ -84,27 +109,57 @@ void Keybox_activate_key(uint8_t key)
 	Keybox_data_active = true;
 }
 
+/* Public: Find out the index to the data active on the stripe
+ *
+ * Note: You must check if there is data active first before calling this
+ *
+ * Returns the key to the active stripe data
+ */
 uint8_t Keybox_get_active_key()
 {
+	assert(Keybox_data_active);
 	return Keybox_active_key;
 }
 
+/* Public: Find out if the given key has been checked out from the keybox
+ *
+ * Requires that key is a valid key
+ *
+ * Returns true if key is not in the box, returns false otherwise
+ */
 bool Keybox_key_in_use(uint8_t key)
 {	
 	assert(key < MAX_STRIPE_DATA);
 	return Keybox_key_status[key];
 }
 
+/* Public: Tell the keybox that there is no active data stripe
+ */
 void Keybox_deactivate()
 {
 	Keybox_data_active = false;
 }
 
+/* Public: Get the size of the data stored in flash at the given index
+ * 
+ * Requires that key is a valid key
+ *
+ * Returns the size of the data stored at index = key
+ */
 size_t Keybox_size_at(uint8_t key)
 {
 	assert(key < MAX_STRIPE_DATA);
 	assert(Keybox_key_status[key]);
 	return Keybox_data_size[key];
+}
+
+/* Public: Find out if there is active stripe data
+ *
+ * Returns true if there is active stripe data, false if there is not
+ */
+bool Keybox_active()
+{
+	return Keybox_data_active;
 }
 /* End Keybox stuff */
 
@@ -181,6 +236,7 @@ int main(void)
 
 			/* Loop to ask client if it has commands to send */
 			tx_buff[0] = ASK_FOR_CMD;
+			printf("ask for cmd\n");
 			while( spi_write(tx_buff, 1) == true ) {
 				
 				/* Receive the command */
@@ -192,6 +248,7 @@ int main(void)
 				/* Interpret the command */
 				switch (rx_buff_cmd[0]) {
 				case SET_KEY_ACTIVE:
+					printf("set_key_active\n");
 					/* rx_buff_cmd[0] = SET_KEY_ACTIVE 
 					 * rx_buff_cmd[1] = key
 					 * rx_buff_cmd[2] = unused
@@ -213,6 +270,7 @@ int main(void)
 					break;
 						
 				case STORE:
+					printf("store\n");
 					/* rx_buff_cmd[0] = STORE 
 					 * rx_buff_cmd[1] = num data bytes (lower 8)
 					 * rx_buff_cmd[2] = num data bytes (upper 8)
@@ -240,6 +298,7 @@ int main(void)
 					break;
 				
 				case ERASE_KEY:
+					printf("erase key\n");
 					/* rx_buff_cmd[0] = ERASE_KEY 
 					 * rx_buff_cmd[1] = key
 					 * rx_buff_cmd[2] = unused
@@ -247,7 +306,8 @@ int main(void)
 					/* Sanity check */
 					assert( Keybox_key_in_use(rx_buff_cmd[1]) );
 					/* Deactivate this data if it is active */
-					if (Keybox_get_active_key() == rx_buff_cmd[1]) {
+					if ( Keybox_active() &&
+						(Keybox_get_active_key() == rx_buff_cmd[1]) ) {
 						swipe_disable();
 						Keybox_deactivate();
 					}
@@ -268,6 +328,8 @@ int main(void)
 					break;
 				} /* switch (rx_buff_cmd) */
 
+				printf("ask for cmd\n");
+			
 			} /* while ( spi_read() == true ) */
 
 		} else if (!client_verified) {	
@@ -292,8 +354,8 @@ int main(void)
 		} /* if (poll_client && client_verified) else if (!client_verified)  */
 		
 		/* DEBUGGING */
-		/* Simulate poll_client being set by timer-triggered interrupt FIXME*/
-		poll_client = !( (bool) (rand() % 4) );
+		/* Simulate poll_client being set by timer-triggered interrupt */
+		poll_client = !( (bool) (rand() % 2) );
 		printf("set poll_client = %d\n", poll_client);
 		/* Wait a bit so the output isn't way too fast */
 		sleep(1);
